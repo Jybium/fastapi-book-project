@@ -15,14 +15,43 @@ jobs:
 
       - name: Setup SSH Key
         run: |
-          echo "${{secrets.DEPLOY_KEY}}" > deploy_key
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" > deploy_key
           chmod 600 deploy_key
 
       - name: Deploy to Server
         run: |
-          ssh -i deploy_key -o StrictHostKeyChecking=no root@146.190.167.154 <<EOF
+          ssh -i deploy_key -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} <<EOF
+          set -e
+
+          echo "🚀 Pulling latest code..."
           cd /fastapi-book-project
           git pull origin main
+
+          echo "🛠 Stopping existing containers..."
           docker-compose down
+
+          echo "🐳 Building and starting containers..."
           docker-compose up -d --build
+
+          echo "🔧 Setting up Nginx configuration..."
+          cat <<NGINX_CONF > /etc/nginx/sites-available/fastapi
+          server {
+              listen 80;
+              server_name ${{ secrets.SERVER_IP }};
+
+              location / {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              }
+          }
+          NGINX_CONF
+
+          ln -sf /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled/
+
+          echo "🔄 Restarting Nginx..."
+          systemctl restart nginx
+
+          echo "✅ Deployment Successful!"
           EOF
