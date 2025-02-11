@@ -15,12 +15,14 @@ jobs:
 
       - name: Setup SSH Key
         run: |
-          echo "${{ secrets.SSH_DEPLOY_KEY }}" > deploy_key
-          chmod 600 deploy_key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy to Server
         run: |
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -T root@${{ secrets.SERVER_IP }} <<EOF
+          ssh root@${{ secrets.SERVER_IP }} <<EOF
           cd /fastapi-book-project
           git pull origin main
           docker-compose down
@@ -28,6 +30,7 @@ jobs:
           EOF
 
           echo "🔧 Setting up Nginx configuration..."
+          ssh root@${{ secrets.SERVER_IP }} <<EOF
           cat <<NGINX_CONF > /etc/nginx/sites-available/fastapi
           server {
               listen 80;
@@ -48,3 +51,4 @@ jobs:
           systemctl restart nginx
 
           echo "✅ Deployment Successful!"
+          EOF
