@@ -20,12 +20,11 @@ jobs:
 
       - name: Deploy to Server
         run: |
-          ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }}
+          ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
           cd /fastapi-book-project
           git pull origin main
           docker-compose down
           docker-compose up -d --build
-          EOF
 
           echo "🔧 Setting up Nginx configuration..."
           cat <<NGINX_CONF > /etc/nginx/sites-available/fastapi
@@ -43,8 +42,6 @@ jobs:
           NGINX_CONF
 
           ln -sf /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled/
-
-          echo "🔄 Restarting Nginx..."
           systemctl restart nginx
-
           echo "✅ Deployment Successful!"
+          EOF
