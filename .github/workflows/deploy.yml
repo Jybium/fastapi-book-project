@@ -1,65 +1,18 @@
-name: CD Pipeline
+version: '3.8'
 
-on:
-  push:
-    branches:
-      - main
+services:
+  fastapi:
+    build: .
+    container_name: fastapi_app
+    ports:
+      - "8000:8000"
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup SSH Key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
-
-      - name: Deploy to Server
-        run: |
-          ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
-
-          # Ensure required packages are installed
-          apt-get update
-          apt-get install -y git docker.io nginx
-
-          # Install docker-compose if not found
-          if ! command -v docker-compose &> /dev/null; then
-              curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              chmod +x /usr/local/bin/docker-compose
-          fi
-
-          # Ensure the project is cloned
-          if [ ! -d "/fastapi-book-project" ]; then
-              git clone https://github.com/Jybium/fastapi-book-project.git /fastapi-book-project
-          fi
-          cd /fastapi-book-project
-          git pull origin main
-
-          # Restart Docker containers
-          docker-compose down
-          docker-compose up -d --build
-
-          # Set up Nginx configuration
-          echo "🔧 Setting up Nginx configuration..."
-          cat <<NGINX_CONF > /etc/nginx/sites-available/fastapi
-          server {
-              listen 80;
-              server_name ${{ secrets.SERVER_IP }};
-
-              location / {
-                  proxy_pass http://127.0.0.1:8080;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-              }
-          }
-          NGINX_CONF
-
-          ln -sf /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled/
-          systemctl restart nginx
-          echo "✅ Deployment Successful!"
-          EOF
+  nginx:
+    image: nginx:latest
+    container_name: nginx_reverse_proxy
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - fastapi
