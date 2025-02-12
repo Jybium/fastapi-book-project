@@ -21,11 +21,29 @@ jobs:
       - name: Deploy to Server
         run: |
           ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
+
+          # Ensure required packages are installed
+          apt-get update
+          apt-get install -y git docker.io nginx
+
+          # Install docker-compose if not found
+          if ! command -v docker-compose &> /dev/null; then
+              curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              chmod +x /usr/local/bin/docker-compose
+          fi
+
+          # Ensure the project is cloned
+          if [ ! -d "/fastapi-book-project" ]; then
+              git@github.com:Jybium/fastapi-book-project.git /fastapi-book-project
+          fi
           cd /fastapi-book-project
           git pull origin main
+
+          # Restart Docker containers
           docker-compose down
           docker-compose up -d --build
 
+          # Set up Nginx configuration
           echo "🔧 Setting up Nginx configuration..."
           cat <<NGINX_CONF > /etc/nginx/sites-available/fastapi
           server {
